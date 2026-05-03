@@ -216,6 +216,27 @@ than sufficient for checking 1–3 packages at a time — the intended use case.
   any **terminal escape sequence injection** in commit messages
 
 ## Fallback for packages with no diff available
+example:
+```
+sbopkg-diff  cpulimit
+Password: 
+>>> Config: REPO_NAME=SBo-git  REPO_BRANCH=current
+>>> Local tree: /var/lib/sbopkg/SBo-git
+>>> API: https://api.github.com/repos/Ponce/slackbuilds
+
+>>> Found: system/cpulimit
+
+=== Recent commits ===
+2026-05-03T08:58:15Z  631258e  20260503.1 global branch merge.
+2021-07-17T19:55:09Z  63daf9f  All: Support $PRINT_PACKAGE_NAME env var
+
+=== Version check ===
+>>> 'cpulimit' not installed
+
+=== Latest diff ===
+>>> Commit 63daf9f79a0016bbf3a712a1d1bdcfdcb724fded touches many packages — no specific diff for system/cpulimit found.
+
+```
 
 ```
 >>> No package-specific commit found in last 5 commits.
