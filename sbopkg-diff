@@ -1,0 +1,197 @@
+#!/bin/bash
+
+# --- Check dependencies ---
+command -v jq   &>/dev/null || { echo "ERROR: jq not found."   >&2; exit 1; }
+command -v curl &>/dev/null || { echo "ERROR: curl not found." >&2; exit 1; }
+
+# --- Validate input: whitelist safe characters only ---
+PKG="${1:?Usage: $0 <package-name>}"
+PKG="${PKG//[^a-zA-Z0-9._-]/}"
+if [[ -z "$PKG" ]]; then
+  echo "ERROR: Invalid package name." >&2
+  exit 1
+fi
+
+# --- Parse config safely (no source) ---
+parse_conf() {
+  local file="$1"
+  local key="$2"
+  grep -m1 "^${key}=" "$file" 2>/dev/null \
+    | cut -d= -f2- \
+    | tr -d '"' | tr -d "'" | tr -d '[:space:]'
+}
+
+# --- Locate config ---
+if [[ -f /root/.sbopkg.conf ]]; then
+  CONF=/root/.sbopkg.conf
+elif [[ -f /etc/sbopkg/sbopkg.conf ]]; then
+  CONF=/etc/sbopkg/sbopkg.conf
+else
+  echo "ERROR: No sbopkg.conf found." >&2
+  exit 1
+fi
+
+# --- Symlink check on config ---
+if [[ -L "$CONF" ]]; then
+  echo "ERROR: Config '$CONF' is a symlink — refusing to read." >&2
+  exit 1
+fi
+# Ownership check only for user config (system config is owned by root)
+if [[ "$CONF" == "/root/.sbopkg.conf" && ! -O "$CONF" ]]; then
+  echo "ERROR: Config '$CONF' is not owned by current user." >&2
+  exit 1
+fi
+
+REPO_NAME=$(parse_conf "$CONF" "REPO_NAME")
+REPO_BRANCH=$(parse_conf "$CONF" "REPO_BRANCH")
+
+# Strip bash default-value syntax e.g. ${REPO_BRANCH:-15.0} -> 15.0
+REPO_NAME="${REPO_NAME#*:-}"
+REPO_NAME="${REPO_NAME%\}}"
+REPO_BRANCH="${REPO_BRANCH#*:-}"
+REPO_BRANCH="${REPO_BRANCH%\}}"
+
+# --- Validate config values ---
+if [[ ! "$REPO_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: Invalid REPO_NAME '$REPO_NAME'." >&2
+  exit 1
+fi
+if [[ ! "$REPO_BRANCH" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+  echo "ERROR: Invalid REPO_BRANCH '$REPO_BRANCH'." >&2
+  exit 1
+fi
+
+# --- Determine LOCAL_TREE and API ---
+case "$REPO_NAME" in
+  SBo-git)
+    LOCAL_TREE="/var/lib/sbopkg/SBo-git"
+    API="https://api.github.com/repos/Ponce/slackbuilds"
+    ;;
+  SBo|*)
+    LOCAL_TREE="/var/lib/sbopkg/${REPO_NAME}/${REPO_BRANCH}"
+    API="https://api.github.com/repos/SlackBuildsOrg/slackbuilds"
+    ;;
+esac
+
+# --- Validate LOCAL_TREE exists and is not a symlink ---
+if [[ -L "$LOCAL_TREE" ]]; then
+  echo "ERROR: Local tree '$LOCAL_TREE' is a symlink — refusing." >&2
+  exit 1
+fi
+if [[ ! -d "$LOCAL_TREE" ]]; then
+  echo "ERROR: Local tree '$LOCAL_TREE' not found." >&2
+  exit 1
+fi
+
+echo ">>> Config: REPO_NAME=$REPO_NAME  REPO_BRANCH=$REPO_BRANCH"
+echo ">>> Local tree: $LOCAL_TREE"
+echo ">>> API: $API"
+echo ""
+
+# --- Find category locally (no symlinks) ---
+INFO=$(find "$LOCAL_TREE" -name "${PKG}.info" ! -type l 2>/dev/null | head -1)
+
+if [[ -z "$INFO" ]]; then
+  echo "ERROR: '$PKG' not found in local SBo tree." >&2
+  exit 1
+fi
+
+CAT=$(echo "$INFO" | awk -F/ '{print $(NF-2)}')
+
+# --- Validate category ---
+if [[ ! "$CAT" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: Invalid category '$CAT'." >&2
+  exit 1
+fi
+
+echo ">>> Found: $CAT/$PKG"
+echo ""
+
+# --- Safe curl wrapper ---
+safe_curl() {
+  curl \
+    --silent \
+    --show-error \
+    --fail \
+    --max-time 15 \
+    --limit-rate 512K \
+    --max-filesize 524288 \
+    --proto '=https' \
+    --tlsv1.2 \
+    "$@"
+}
+
+# --- 1st API call: commits ---
+echo "=== Recent commits ==="
+COMMITS=$(safe_curl "$API/commits?path=$CAT/$PKG&per_page=5") || {
+  echo "ERROR: Failed to fetch commits." >&2
+  exit 1
+}
+
+# Sanitize output: make non-printable/escape characters visible (show only 2)
+echo "$COMMITS" \
+  | jq -r '.[] | "\(.commit.committer.date)  \(.sha[0:7])  \(.commit.message | split("\n")[0])"' \
+  | cat -v \
+  | head -2
+
+echo ""
+
+# --- Find last package-specific commit ---
+# Filter OUT known global commit patterns
+PKG_SHA=$(echo "$COMMITS" | jq -r \
+  '[.[] | select(.commit.message | test("global branch merge|^[0-9]{8}[.]"; "i") | not)] | .[0].sha')
+
+# --- Version check vs installed ---
+echo "=== Version check ==="
+INSTALLED=$(find /var/lib/pkgtools/packages -maxdepth 1 ! -type l -name "${PKG}-*" 2>/dev/null | head -1)
+if [[ -n "$INSTALLED" ]]; then
+  INST_VER=$(basename "$INSTALLED" | sed "s/^${PKG}-//" | cut -d- -f1)
+  SBO_VER=$(echo "$COMMITS" | jq -r     '[.[] | select(.commit.message | test("version"; "i"))] | .[0].commit.message'     | grep -oP '(?<=version )\S+' | head -1)
+  echo "Installed : $INST_VER"
+  echo "SBo latest: $SBO_VER"
+  if [[ -z "$SBO_VER" || "$SBO_VER" == "null" ]]; then
+    echo ">>> (could not determine SBo version from commit messages)"
+  elif [[ "$INST_VER" == "$SBO_VER" ]]; then
+    echo ">>> UP TO DATE"
+  else
+    echo ">>> UPDATE AVAILABLE"
+  fi
+else
+  echo ">>> '$PKG' not installed"
+fi
+
+echo ""
+echo "=== Latest diff ==="
+
+# --- Validate SHA before 2nd API call ---
+if [[ -z "$PKG_SHA" || "$PKG_SHA" == "null" ]]; then
+  echo ">>> No package-specific commit found in last 5 commits."
+  echo ">>> Run: git log --oneline -- $CAT/$PKG (in local tree)"
+  exit 0
+fi
+SHA="$PKG_SHA"
+SHA="${SHA//[^a-f0-9]/}"
+if [[ ! "$SHA" =~ ^[a-f0-9]{40}$ ]]; then
+  echo "ERROR: Invalid SHA received from API." >&2
+  exit 1
+fi
+
+# --- 2nd API call: diff (higher size limit, filter to $CAT/$PKG only) ---
+DIFF=$(curl \
+  --silent --show-error --fail \
+  --max-time 30 \
+  --limit-rate 1M \
+  --max-filesize 5242880 \
+  --proto '=https' \
+  --tlsv1.2 \
+  "$API/commits/$SHA") || {
+  echo "ERROR: Failed to fetch diff." >&2
+  exit 1
+}
+FILTERED=$(echo "$DIFF" | jq -r --arg p "$CAT/$PKG" \
+  '.files[] | select(.filename | startswith($p)) | "--- " + .filename + "\n" + (.patch // "(binary)")' | cat -v)
+if [[ -z "$FILTERED" ]]; then
+  echo ">>> Commit $SHA touches many packages — no specific diff for $CAT/$PKG found."
+else
+  echo "$FILTERED"
+fi
