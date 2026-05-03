@@ -146,7 +146,7 @@ echo "=== Version check ==="
 INSTALLED=$(find /var/lib/pkgtools/packages -maxdepth 1 ! -type l -name "${PKG}-*" 2>/dev/null | head -1)
 if [[ -n "$INSTALLED" ]]; then
   INST_VER=$(basename "$INSTALLED" | sed "s/^${PKG}-//" | cut -d- -f1)
-  SBO_VER=$(echo "$COMMITS" | jq -r     '[.[] | select(.commit.message | test("version"; "i"))] | .[0].commit.message'     | grep -oP '(?<=version )\S+' | head -1)
+  SBO_VER=$(echo "$COMMITS" | jq -r     '[.[] | select(.commit.message | test("version"; "i"))] | .[0].commit.message'     | grep -oP '(?<=version )[\w.]+(?<!\.)' | head -1)
   echo "Installed : $INST_VER"
   echo "SBo latest: $SBO_VER"
   if [[ -z "$SBO_VER" || "$SBO_VER" == "null" ]]; then
@@ -159,6 +159,9 @@ if [[ -n "$INSTALLED" ]]; then
 else
   echo ">>> '$PKG' not installed"
 fi
+
+echo ""
+echo "=== Latest diff ==="
 
 echo ""
 echo "=== Latest diff ==="
