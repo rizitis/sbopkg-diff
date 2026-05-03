@@ -163,9 +163,6 @@ fi
 echo ""
 echo "=== Latest diff ==="
 
-echo ""
-echo "=== Latest diff ==="
-
 # --- Validate SHA before 2nd API call ---
 if [[ -z "$PKG_SHA" || "$PKG_SHA" == "null" ]]; then
   echo ">>> No package-specific commit found in last 5 commits."
