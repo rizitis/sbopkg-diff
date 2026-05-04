@@ -2,56 +2,52 @@
 
 ## What is it?
 
-`sbopkg-diff` is a companion tool for `sbopkg`. It allows you to inspect the
-latest upstream changes for any SlackBuilds.org package directly from the
-GitHub API, without performing a full repository sync. It works with both the
-official SBo repository (SlackBuildsOrg) and Ponce's `SBo-git` repo for current.
+`sbopkg-diff` is a companion tool for `sbopkg`. It allows you to inspect the latest upstream changes for any SlackBuilds.org package directly from the GitHub API **before** you perform a repository sync.
+
+It works seamlessly with both the official SBo repository (`SlackBuildsOrg`) and Ponce's `SBo-git` repository for Slackware current.
 
 ## Dependencies
 
-- `jq` — for JSON parsing
-- `sbopkg` - :)
-
-**jq** is available on SlackBuilds.org for Slackware-15.0 and already installed on current.
-
-**sbopkg** you know were to find it...
+- **jq** — for JSON processing (installed by default on Slackware current).
+- **sbopkg** — the best SlackBuilds manager.
 
 ## Installation
-
-```bash
+```
+# Copy the script to your path
 cp sbopkg-diff /usr/local/bin/sbopkg-diff
 chmod +x /usr/local/bin/sbopkg-diff
 ```
 
 ## Usage
-
-```bash
+```
 sbopkg-diff <package-name>
 ```
 
-### Examples
+## Examples
+
+#### Checking a package on 15.0:
 
 ```
 sbopkg-diff electron-bin
->>> Config: REPO_NAME=SBo  REPO_BRANCH=15.0
->>> Local tree: /var/lib/sbopkg/SBo/15.0
->>> API: https://api.github.com/repos/SlackBuildsOrg/slackbuilds
+>>> Config: REPO=SBo BRANCH=15.0
+>>> Found locally: development/electron-bin
 
->>> Found: development/electron-bin
-
-=== Recent commits ===
-2026-04-28T06:09:31Z  fe1c4b8  development/electron-bin: Updated for version 41.3.0
-2026-04-25T07:28:37Z  b6306a6  development/electron-bin: Updated for version 41.2.1.
-
-=== Version check ===
+=== Version check (Live from GitHub) ===
 Installed : 41.3.0
 SBo latest: 41.3.0
 >>> UP TO DATE
 
-=== Latest diff ===
---- development/electron-bin/electron-bin.SlackBuild
+=== Recent commits (15.0) ===
+2026-04-28T06:09:31Z  fe1c4b8  development/electron-bin: Updated for version 41.3.0
+2026-04-25T07:28:37Z  b6306a6  development/electron-bin: Updated for version 41.2.1.
+2026-04-17T07:30:12Z  cfcb74c  development/electron-bin: Updated for version 41.2.0
+
+=== Latest diff for electron-bin ===
+index c39a61d7971..cad8b75980f 100644
+--- a/development/electron-bin/electron-bin.SlackBuild
++++ b/development/electron-bin/electron-bin.SlackBuild
 @@ -29,7 +29,7 @@ cd $(dirname $0) ; CWD=$(pwd)
- 
+
  PRGNAM=electron-bin
  PKGNAM=electron
 -VERSION=${VERSION:-41.2.1}
@@ -59,188 +55,98 @@ SBo latest: 41.3.0
  BUILD=${BUILD:-1}
  TAG=${TAG:-_SBo}
  PKGTYPE=${PKGTYPE:-tgz}
---- development/electron-bin/electron-bin.info
-@@ -1,10 +1,10 @@
- PRGNAM="electron-bin"
--VERSION="41.2.1"
-+VERSION="41.3.0"
- HOMEPAGE="https://www.electronjs.org/"
- DOWNLOAD="UNSUPPORTED"
- MD5SUM=""
--DOWNLOAD_x86_64="https://github.com/electron/electron/releases/download/v41.2.1/electron-v41.2.1-linux-x64.zip"
--MD5SUM_x86_64="dc9603fceb6caafab58c277b177a9941"
-+DOWNLOAD_x86_64="https://github.com/electron/electron/releases/download/v41.3.0/electron-v41.3.0-linux-x64.zip"
-+MD5SUM_x86_64="e9929581d7ec4c0ab86e1185c0d3effb"
- REQUIRES=""
- MAINTAINER="Antonio Leal"
- EMAIL="antonioleal@yahoo.com"
 ```
 
+#### Checking a package on current:
+
 ```
-sbopkg-diff vlc
->>> Config: REPO_NAME=SBo-git  REPO_BRANCH=current
->>> Local tree: /var/lib/sbopkg/SBo-git
->>> API: https://api.github.com/repos/Ponce/slackbuilds
+sbopkg-diff zenity
+>>> Config: REPO=SBo-git BRANCH=current
+>>> Found locally: desktop/zenity
 
->>> Found: multimedia/vlc
-
-=== Recent commits ===
-2026-05-03T08:58:15Z  631258e  20260503.1 global branch merge.
-2026-01-22T06:58:17Z  1c6a49a  multimedia/vlc: Updated for version 3.0.23
-
-=== Version check ===
-Installed : 3.0.23
-SBo latest: 3.0.23
+=== Version check (Live from GitHub) ===
+Installed : 4.0.2
+SBo latest: 4.0.2
 >>> UP TO DATE
 
-=== Latest diff ===
---- multimedia/vlc/vlc.SlackBuild
-@@ -10,6 +10,7 @@
- # Copyright (c) 2022  Bill Kirkpatrick, Bay City, Texas, USA
- # Copyright (c) 2023  Tim Dickson, Scotland
- # Copyright (c) 2024  Steven Voges <Oregon, USA>
-+# Copyright (c) 2026  Antonio Leal, Porto Salvo, Oeiras, Portugal
- # All rights reserved.
- #
- #   Redistribution and use of this script, with or without modification is
-@@ -48,8 +49,8 @@
- cd $(dirname $0) ; CWD=$(pwd)
- 
- PRGNAM=vlc
--VERSION=${VERSION:-3.0.20}
--BUILD=${BUILD:-2}
-+VERSION=${VERSION:-3.0.23}
-+BUILD=${BUILD:-1}
- TAG=${TAG:-_SBo}
- PKGTYPE=${PKGTYPE:-tgz}
- 
---- multimedia/vlc/vlc.info
+=== Recent commits (current) ===
+2026-05-03T08:58:15Z  631258e  20260503.1 global branch merge.
+2024-11-02T12:19:43Z  c8bb093  desktop/zenity: Updated for version 3.44.5
+2024-05-25T04:47:43Z  f4df306  desktop/zenity: Updated for version 3.44.4.
+
+=== Latest diff for zenity ===
+index 125286c90e5..79ad8648343 100644
+--- a/desktop/zenity/README
++++ b/desktop/zenity/README
+@@ -4,7 +4,8 @@ similar to the classic `dialog` program, but with a GUI interface.
+
+ OPTIONAL DEPENDENCIES:
+
+-* webkit2gtk-4.1
++* webkit2gtk-6.0 (ie, webkitgtk for gtk4; NOT yet part of sbo-ponce as
++  of 2024-07-28)
+
+   To enable: pass `WEBKITGTK=true` as an option to the slackbuild.
+   If this is not specified, it will default to `false`.
+index c32ae1081eb..5cd4c8868ea 100644
+--- a/desktop/zenity/zenity.info
++++ b/desktop/zenity/zenity.info
 @@ -1,10 +1,10 @@
- PRGNAM="vlc"
--VERSION="3.0.20"
-+VERSION="3.0.23"
- HOMEPAGE="https://www.videolan.org/vlc/"
--DOWNLOAD="https://get.videolan.org/vlc/3.0.20/vlc-3.0.20.tar.xz"
--MD5SUM="e8337fcd2df92f3901dad091fb85f545"
-+DOWNLOAD="https://get.videolan.org/vlc/3.0.23/vlc-3.0.23.tar.xz"
-+MD5SUM="ebc3f0d0a94785fd2b2df4087516938e"
+ PRGNAM="zenity"
+-VERSION="3.44.5"
++VERSION="4.0.2"
+ HOMEPAGE="https://gitlab.gnome.org/GNOME/zenity"
+-DOWNLOAD="https://download.gnome.org/sources/zenity/3.44/zenity-3.44.5.tar.xz"
+-MD5SUM="69f4a4fdce7217231207019a6e27636b"
++DOWNLOAD="https://download.gnome.org/sources/zenity/4.0/zenity-4.0.2.tar.xz"
++MD5SUM="08ba19bb3fe5c180402690d5c40c6cc3"
  DOWNLOAD_x86_64=""
  MD5SUM_x86_64=""
- REQUIRES="libass libdc1394 libdvbpsi libmpeg2 lua portaudio twolame gsm libtar libkate faac libdca libshout avahi projectM jack libsidplay2 zvbi faad2 libavc1394 libmodplug musepack-tools vcdimager dirac gnome-vfs live555 rtmpdump libdvdcss schroedinger libminizip chromaprint x264 x265 libnfs protobuf3"
--MAINTAINER="Steven Voges"
--EMAIL="svoges.sbo@gmail.com"
-+MAINTAINER="Antonio Leal"
-+EMAIL="antonioleal@yahoo.com"
-
+-REQUIRES=""
++REQUIRES="libadwaita"
+ MAINTAINER="Logan Rathbone"
+ EMAIL="poprocks@gmail.com"
 ```
-> If you command as user (not root) it read /etc/sbopkg/sbopkg.conf only for your sbopkg repo url
-> If you run as root it first look at /root/.sbopkg.conf and only if not found look at /etc/sbopkg/sbopkg.conf
-> So be sure you have setup a valid sbopkg.conf on both cases if you use /root/.sbopkg.conf.
+### What it does
 
-## What it does
+1.    **Configuration Auto-detection**: It reads
+- a) /root/.sbopkg.conf (if you are root and if exist its first choise)
+- b) /etc/sbopkg/sbopkg.conf.  (if  `/root/.sbopkg.conf`  exist then you must have same REPO_NAME and REPO_BRANCH on both)<br>
+It automatically detects your REPO_NAME and REPO_BRANCH to select the correct GitHub API endpoint.
 
-1. **Reads your sbopkg configuration** — checks `/root/.sbopkg.conf` first,
-   falls back to `/etc/sbopkg/sbopkg.conf`. Automatically detects `REPO_NAME`
-   and `REPO_BRANCH`, and selects the correct GitHub API endpoint accordingly.
+2.   ** Category Discovery**: Uses your local tree to find the package category (e.g., system, multimedia) so you don't have to provide it.
 
-2. **Finds the package category locally** — uses your existing local SBo tree
-   (e.g. `/var/lib/sbopkg/SBo-git`) to determine the category (e.g.
-   `development`, `multimedia`) without any API call.
+3.    **Live Version Check**: Fetches the .info file directly from the GitHub branch raw content. This bypasses API caching and ensures you see the real version before you sync.
 
-3. **Fetches recent commits** — retrieves the last 5 commits that touched the
-   package path, displays the 2 most recent.
+4.    **Intelligent Diffing**: Fetches the unified diff of the most recent commit and uses sed to isolate changes strictly related to your package, filtering out unrelated changes from global merges.
 
-4. **Checks installed version** — compares the version in `/var/lib/pkgtools/packages/`
-   against the latest version found in the commit messages, and reports whether
-   an update is available.
+4.    Version Comparison: Uses sort -V logic to compare versions, correctly identifying if SBo is newer or if your installed version is ahead.
 
-5. **Shows the latest diff** — fetches and displays the unified diff of the
-   most recent package-specific commit, filtered to show only files belonging
-   to the requested package.
+---
 
-## Configuration auto-detection
+### Security & Reliability
 
-| Config file | REPO_NAME | Local tree | API used |
-|---|---|---|---|
-| `/root/.sbopkg.conf` | `SBo-git` | `/var/lib/sbopkg/SBo-git` | Ponce/slackbuilds |
-| `/etc/sbopkg/sbopkg.conf` | `SBo` | `/var/lib/sbopkg/SBo/15.0` | SlackBuildsOrg/slackbuilds |
+#### sbopkg-diff is designed with defensive programming:
 
-## su requirement
+-   No Sourcing: Configuration files are never executed (sourced); they are parsed safely with grep and cut.
 
-`sbopkg-diff` must be run as root **only** when your active
-configuration is `/root/.sbopkg.conf`, since that file is readable by root
-only. If your configuration lives in `/etc/sbopkg/sbopkg.conf` only, then you can run
-it as a regular user.
+-    Symlink Protection: Refuses to read config files or local trees that are symlinks to prevent redirection exploits.
 
-## GitHub API rate limiting
+-    Input Sanitization: Package names are whitelisted to prevent command injection.
 
-The tool uses exactly **2 API calls** per invocation:
+-    Connection Hardening: Enforces HTTPS, TLS 1.2+, and strict timeouts.
 
-1. Fetch recent commits for the package path
-2. Fetch the diff for the latest package-specific commit
+-    Terminal Safety: Passes remote commit messages through cat -v to neutralize potential terminal escape sequence injections.
 
-The GitHub API allows **60 unauthenticated requests per hour**, which is more
-than sufficient for checking 1–3 packages at a time — the intended use case.
+---
 
-## Known limitations
+#### GitHub API Rate Limiting
 
-- **Mass commits**: Some historical commits (e.g. "All: Support
-  $PRINT_PACKAGE_NAME") touched every package in the repository. The GitHub
-  API returns a maximum of 300 files per commit, so packages whose path falls
-  outside the first 300 alphabetically will show no diff. In that case,
-  `sbopkg-diff` will display an informative message and suggest using
-  `git log` (in /var/lib/sbopkg/repo_path) locally instead.
+The tool is optimized to use only 2-3 API calls per package check. The GitHub API allows 60 unauthenticated requests per hour, which is ample for standard usage.
 
-- **Global branch merges**: Ponce's repo includes periodic global merge
-  commits (e.g. `20260503.1 global branch merge`). These are automatically
-  skipped when looking for the relevant diff.
 
-- **Version detection**: Version numbers are extracted from commit messages.
-  If a commit message does not follow the standard `Updated for version X.Y.Z`
-  format, the version comparison may be inconclusive.
+#### Known Limitations
 
-## Security
+    Mass Commits: If a commit touches more than 300 files (GitHub's API limit), the diff may not be available via API. In such cases, the script will suggest a local git log command.
 
-`sbopkg-diff` is designed to run safely as root or not:
-
-- Config files are **never sourced** — only specific keys are parsed with `grep`
-- Config files are checked for **symlink attacks** before reading
-- All **input is sanitized** with strict character whitelists
-- **REPO_NAME** and **REPO_BRANCH** are validated with regex before use
-- The local tree is checked for **symlinks** (`find ! -type l`)
-- All **SHA values** from the API are validated as 40-character hex strings
-  before being used in subsequent requests
-- `curl` enforces **HTTPS only**, **TLS 1.2 minimum**, request timeouts,
-  rate limits, and maximum file sizes
-- API output rendered to the terminal is passed through `cat -v` to neutralize
-  any **terminal escape sequence injection** in commit messages
-
-## Fallback for packages with no diff available
-example:
-```
-sbopkg-diff  cpulimit
-Password: 
->>> Config: REPO_NAME=SBo-git  REPO_BRANCH=current
->>> Local tree: /var/lib/sbopkg/SBo-git
->>> API: https://api.github.com/repos/Ponce/slackbuilds
-
->>> Found: system/cpulimit
-
-=== Recent commits ===
-2026-05-03T08:58:15Z  631258e  20260503.1 global branch merge.
-2021-07-17T19:55:09Z  63daf9f  All: Support $PRINT_PACKAGE_NAME env var
-
-=== Version check ===
->>> 'cpulimit' not installed
-
-=== Latest diff ===
->>> Commit 63daf9f79a0016bbf3a712a1d1bdcfdcb724fded touches many packages — no specific diff for system/cpulimit found.
-
-```
-
-```
->>> No package-specific commit found in last 5 commits.
->>> Run: git log --oneline -- system/cpulimit (in local tree)
-```
-
-Use the suggested `git log` command in your local SBo tree for a full history.
+    Case Sensitivity: The package name must match the case used in the SBo repository (usually lowercase).
