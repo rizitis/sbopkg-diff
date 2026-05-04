@@ -4,15 +4,15 @@
 command -v jq   &>/dev/null || { echo "ERROR: jq not found."   >&2; exit 1; }
 command -v curl &>/dev/null || { echo "ERROR: curl not found." >&2; exit 1; }
 
-# --- Validate input: whitelist safe characters only ---
+# --- Validate input ---
 PKG="${1:?Usage: $0 <package-name>}"
-PKG="${PKG//[^a-zA-Z0-9._-]/}"
+PKG="${PKG//[^a-zA-Z0-9._-]/}" # Sanitize: allow only safe characters
 if [[ -z "$PKG" ]]; then
   echo "ERROR: Invalid package name." >&2
   exit 1
 fi
 
-# --- Parse config safely (no source) ---
+# --- Parse config safely without sourcing ---
 parse_conf() {
   local file="$1"
   local key="$2"
@@ -21,7 +21,7 @@ parse_conf() {
     | tr -d '"' | tr -d "'" | tr -d '[:space:]'
 }
 
-# --- Locate config ---
+# --- Locate config file ---
 if [[ -f /root/.sbopkg.conf ]]; then
   CONF=/root/.sbopkg.conf
 elif [[ -f /etc/sbopkg/sbopkg.conf ]]; then
@@ -31,37 +31,20 @@ else
   exit 1
 fi
 
-# --- Symlink check on config ---
+# Security check: ensure config is not a symlink
 if [[ -L "$CONF" ]]; then
   echo "ERROR: Config '$CONF' is a symlink — refusing to read." >&2
-  exit 1
-fi
-# Ownership check only for user config (system config is owned by root)
-if [[ "$CONF" == "/root/.sbopkg.conf" && ! -O "$CONF" ]]; then
-  echo "ERROR: Config '$CONF' is not owned by current user." >&2
   exit 1
 fi
 
 REPO_NAME=$(parse_conf "$CONF" "REPO_NAME")
 REPO_BRANCH=$(parse_conf "$CONF" "REPO_BRANCH")
 
-# Strip bash default-value syntax e.g. ${REPO_BRANCH:-15.0} -> 15.0
-REPO_NAME="${REPO_NAME#*:-}"
-REPO_NAME="${REPO_NAME%\}}"
-REPO_BRANCH="${REPO_BRANCH#*:-}"
-REPO_BRANCH="${REPO_BRANCH%\}}"
+# Clean bash default-value syntax (e.g., ${REPO_NAME:-SBo})
+REPO_NAME="${REPO_NAME#*:-}"; REPO_NAME="${REPO_NAME%\}}"
+REPO_BRANCH="${REPO_BRANCH#*:-}"; REPO_BRANCH="${REPO_BRANCH%\}}"
 
-# --- Validate config values ---
-if [[ ! "$REPO_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-  echo "ERROR: Invalid REPO_NAME '$REPO_NAME'." >&2
-  exit 1
-fi
-if [[ ! "$REPO_BRANCH" =~ ^[a-zA-Z0-9._-]+$ ]]; then
-  echo "ERROR: Invalid REPO_BRANCH '$REPO_BRANCH'." >&2
-  exit 1
-fi
-
-# --- Determine LOCAL_TREE and API ---
+# --- Determine API endpoint and LOCAL_TREE path ---
 case "$REPO_NAME" in
   SBo-git)
     LOCAL_TREE="/var/lib/sbopkg/SBo-git"
@@ -73,125 +56,86 @@ case "$REPO_NAME" in
     ;;
 esac
 
-# --- Validate LOCAL_TREE exists and is not a symlink ---
-if [[ -L "$LOCAL_TREE" ]]; then
-  echo "ERROR: Local tree '$LOCAL_TREE' is a symlink — refusing." >&2
+# --- Find package category locally ---
+# We use the local tree to identify the category (e.g., desktop, system)
+INFO_LOCAL=$(find "$LOCAL_TREE" -name "${PKG}.info" ! -type l 2>/dev/null | head -1)
+if [[ -z "$INFO_LOCAL" ]]; then
+  echo "ERROR: '$PKG' not found in local tree. Sync first or check name." >&2
   exit 1
 fi
-if [[ ! -d "$LOCAL_TREE" ]]; then
-  echo "ERROR: Local tree '$LOCAL_TREE' not found." >&2
-  exit 1
-fi
+CAT=$(echo "$INFO_LOCAL" | awk -F/ '{print $(NF-2)}')
 
-echo ">>> Config: REPO_NAME=$REPO_NAME  REPO_BRANCH=$REPO_BRANCH"
-echo ">>> Local tree: $LOCAL_TREE"
-echo ">>> API: $API"
+echo ">>> Config: REPO=$REPO_NAME BRANCH=$REPO_BRANCH"
+echo ">>> Found locally: $CAT/$PKG"
 echo ""
 
-# --- Find category locally (no symlinks) ---
-INFO=$(find "$LOCAL_TREE" -name "${PKG}.info" ! -type l 2>/dev/null | head -1)
-
-if [[ -z "$INFO" ]]; then
-  echo "ERROR: '$PKG' not found in local SBo tree." >&2
-  exit 1
-fi
-
-CAT=$(echo "$INFO" | awk -F/ '{print $(NF-2)}')
-
-# --- Validate category ---
-if [[ ! "$CAT" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-  echo "ERROR: Invalid category '$CAT'." >&2
-  exit 1
-fi
-
-echo ">>> Found: $CAT/$PKG"
-echo ""
-
-# --- Safe curl wrapper ---
+# --- Safe curl wrapper with security defaults ---
 safe_curl() {
-  curl \
-    --silent \
-    --show-error \
-    --fail \
-    --max-time 15 \
-    --limit-rate 512K \
-    --max-filesize 524288 \
-    --proto '=https' \
-    --tlsv1.2 \
-    "$@"
+  curl --silent --show-error --fail --max-time 20 \
+    --proto '=https' --tlsv1.2 "$@"
 }
 
-# --- 1st API call: commits ---
-echo "=== Recent commits ==="
-COMMITS=$(safe_curl "$API/commits?path=$CAT/$PKG&per_page=5") || {
-  echo "ERROR: Failed to fetch commits." >&2
-  exit 1
-}
+# --- 1. Version Check (Live from API Content) ---
+echo "=== Version check (Live from GitHub) ==="
 
-# Sanitize output: make non-printable/escape characters visible (show only 2)
-echo "$COMMITS" \
-  | jq -r '.[] | "\(.commit.committer.date)  \(.sha[0:7])  \(.commit.message | split("\n")[0])"' \
-  | cat -v \
-  | head -2
+# Fetch the .info file directly from the branch (raw) to bypass API commit cache
+REMOTE_INFO_URL="${API}/contents/$CAT/$PKG/${PKG}.info?ref=$REPO_BRANCH"
+REMOTE_CONTENT=$(safe_curl -H "Accept: application/vnd.github.v3.raw" "$REMOTE_INFO_URL")
 
-echo ""
+if [[ $? -ne 0 || -z "$REMOTE_CONTENT" ]]; then
+    echo "ERROR: Could not fetch remote info."
+    SBO_VER="Unknown"
+else
+    SBO_VER=$(echo "$REMOTE_CONTENT" | grep "^VERSION=" | cut -d'"' -f2)
+fi
 
-# --- Find last package-specific commit ---
-# Filter OUT known global commit patterns
-PKG_SHA=$(echo "$COMMITS" | jq -r \
-  '[.[] | select(.commit.message | test("global branch merge|^[0-9]{8}[.]"; "i") | not)] | .[0].sha')
-
-# --- Version check vs installed ---
-echo "=== Version check ==="
+# Determine installed version from pkgtools
 INSTALLED=$(find /var/lib/pkgtools/packages -maxdepth 1 ! -type l -name "${PKG}-*" 2>/dev/null | head -1)
 if [[ -n "$INSTALLED" ]]; then
-  INST_VER=$(basename "$INSTALLED" | sed "s/^${PKG}-//" | cut -d- -f1)
-  SBO_VER=$(echo "$COMMITS" | jq -r     '[.[] | select(.commit.message | test("version"; "i"))] | .[0].commit.message'     | grep -oP '(?<=version )[\w.]+(?<!\.)' | head -1)
-  echo "Installed : $INST_VER"
-  echo "SBo latest: $SBO_VER"
-  if [[ -z "$SBO_VER" || "$SBO_VER" == "null" ]]; then
-    echo ">>> (could not determine SBo version from commit messages)"
-  elif [[ "$INST_VER" == "$SBO_VER" ]]; then
-    echo ">>> UP TO DATE"
-  else
-    echo ">>> UPDATE AVAILABLE"
-  fi
+    # Slackware versioning: extract version by stripping build, arch, and tag
+    INST_VER=$(basename "$INSTALLED" | rev | cut -d- -f3- | rev | sed "s/^${PKG}-//")
 else
-  echo ">>> '$PKG' not installed"
+    INST_VER="Not Installed"
 fi
 
+echo "Installed : $INST_VER"
+echo "SBo latest: $SBO_VER"
+
+if [[ "$INST_VER" != "Not Installed" && "$SBO_VER" != "Unknown" ]]; then
+    if [[ "$INST_VER" == "$SBO_VER" ]]; then
+        echo ">>> UP TO DATE"
+    else
+        # Version comparison using sort -V
+        NEWER=$(printf '%s\n%s' "$INST_VER" "$SBO_VER" | sort -V | tail -n1)
+        if [[ "$NEWER" == "$SBO_VER" ]]; then
+            echo ">>> UPDATE AVAILABLE"
+        else
+            echo ">>> YOUR VERSION IS NEWER"
+        fi
+    fi
+fi
 echo ""
-echo "=== Latest diff ==="
 
-# --- Validate SHA before 2nd API call ---
-if [[ -z "$PKG_SHA" || "$PKG_SHA" == "null" ]]; then
-  echo ">>> No package-specific commit found in last 5 commits."
-  echo ">>> Run: git log --oneline -- $CAT/$PKG (in local tree)"
-  exit 0
+# --- 2. Fetch Recent Commits ---
+echo "=== Recent commits ($REPO_BRANCH) ==="
+# Fetch last 5 commits for the specific package path
+COMMITS=$(safe_curl "$API/commits?path=$CAT/$PKG&sha=$REPO_BRANCH&per_page=5")
+if [[ -n "$COMMITS" ]]; then
+    # Format: Date | Short SHA | First line of commit message
+    echo "$COMMITS" | jq -r '.[] | "\(.commit.committer.date)  \(.sha[0:7])  \(.commit.message | split("\n")[0])"' | cat -v | head -3
 fi
-SHA="$PKG_SHA"
-SHA="${SHA//[^a-f0-9]/}"
-if [[ ! "$SHA" =~ ^[a-f0-9]{40}$ ]]; then
-  echo "ERROR: Invalid SHA received from API." >&2
-  exit 1
-fi
+echo ""
 
-# --- 2nd API call: diff (higher size limit, filter to $CAT/$PKG only) ---
-DIFF=$(curl \
-  --silent --show-error --fail \
-  --max-time 30 \
-  --limit-rate 1M \
-  --max-filesize 5242880 \
-  --proto '=https' \
-  --tlsv1.2 \
-  "$API/commits/$SHA") || {
-  echo "ERROR: Failed to fetch diff." >&2
-  exit 1
-}
-FILTERED=$(echo "$DIFF" | jq -r --arg p "$CAT/$PKG" \
-  '.files[] | select(.filename | startswith($p)) | "--- " + .filename + "\n" + (.patch // "(binary)")' | cat -v)
-if [[ -z "$FILTERED" ]]; then
-  echo ">>> Commit $SHA touches many packages — no specific diff for $CAT/$PKG found."
+# --- 3. Fetch Latest Diff ---
+echo "=== Latest diff for $PKG ==="
+# Get the SHA of the most recent commit affecting this path
+SHA=$(echo "$COMMITS" | jq -r '.[0].sha')
+
+if [[ -n "$SHA" && "$SHA" != "null" ]]; then
+    # Fetch the diff in raw format and isolate the specific package changes using sed
+    safe_curl -H "Accept: application/vnd.github.v3.diff" "$API/commits/$SHA" \
+        | sed -n "/diff --git a\/$CAT\/$PKG/,/diff --git/p" \
+        | grep -v "^diff --git" | cat -v
 else
-  echo "$FILTERED"
+    echo ">>> No commits found for $CAT/$PKG in branch $REPO_BRANCH"
 fi
