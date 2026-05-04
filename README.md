@@ -114,7 +114,7 @@ index c32ae1081eb..5cd4c8868ea 100644
 - b) /etc/sbopkg/sbopkg.conf.  (if  `/root/.sbopkg.conf`  exist then you must have same REPO_NAME and REPO_BRANCH on both)<br>
 It automatically detects your REPO_NAME and REPO_BRANCH to select the correct GitHub API endpoint.
 
-2.   ** Category Discovery**: Uses your local tree to find the package category (e.g., system, multimedia) so you don't have to provide it.
+2.   **Category Discovery**: Uses your local tree to find the package category (e.g., system, multimedia) so you don't have to provide it.
 
 3.    **Live Version Check**: Fetches the .info file directly from the GitHub branch raw content. This bypasses API caching and ensures you see the real version before you sync.
 
