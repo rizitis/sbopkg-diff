@@ -9,7 +9,7 @@ It works seamlessly with both the official SBo repository (`SlackBuildsOrg`) and
 ## Dependencies
 
 - **jq** — for JSON processing (installed by default on Slackware current).
-- **sbopkg** — the best SlackBuilds manager.
+- **sbopkg** — SlackBuilds manager.
 
 ## Installation
 ```
