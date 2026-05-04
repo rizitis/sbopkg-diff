@@ -128,15 +128,15 @@ It automatically detects your REPO_NAME and REPO_BRANCH to select the correct Gi
 
 #### sbopkg-diff is designed with defensive programming:
 
--   No Sourcing: Configuration files are never executed (sourced); they are parsed safely with grep and cut.
+-   **No Sourcing**: Configuration files are never executed (sourced); they are parsed safely with grep and cut.
 
--    Symlink Protection: Refuses to read config files or local trees that are symlinks to prevent redirection exploits.
+-    **Symlink Protection**: Refuses to read config files or local trees that are symlinks to prevent redirection exploits.
 
--    Input Sanitization: Package names are whitelisted to prevent command injection.
+-    **Input Sanitization**: Package names are whitelisted to prevent command injection.
 
--    Connection Hardening: Enforces HTTPS, TLS 1.2+, and strict timeouts.
+-    **Connection Hardening**: Enforces HTTPS, TLS 1.2+, and strict timeouts.
 
--    Terminal Safety: Passes remote commit messages through cat -v to neutralize potential terminal escape sequence injections.
+-    **Terminal Safety**: Passes remote commit messages through cat -v to neutralize potential terminal escape sequence injections.
 
 ---
 
