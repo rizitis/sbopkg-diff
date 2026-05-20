@@ -12,6 +12,13 @@ if [[ -z "$PKG" ]]; then
   exit 1
 fi
 
+if [ "$EUID" -eq 0 ]; then
+    echo "You are root. READING /root/.sbopkg.conf first (if exists) "
+else
+    echo "You are NOT root. READING only /etc/sbopkg/sbopkg.conf "
+fi
+
+
 # --- Parse config safely without sourcing ---
 parse_conf() {
   local file="$1"
